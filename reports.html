@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Звіти — Lulu</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">☁️</div>
+        <span>Lulu</span>
+      </div>
+      <nav class="nav" id="navMenu"></nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="greeting">
+          <h1>Звіти</h1>
+          <p>Аналітика роботи магазину</p>
+        </div>
+
+        <div class="user">
+          <span id="userName"></span>
+          <div class="avatar">👤</div>
+          <button onclick="logout()" class="btn" style="background:#fee2e2; color:#dc2626; padding:6px 14px;">Вийти</button>
+        </div>
+      </div>
+
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    const user = checkAuth(['manager', 'warehouse']);
+    updateUserInfo();
+    renderNav('reports');
+
+    async function loadReports() {
+      try {
+        const stats = await apiRequest('/stats');
+        const sales = await apiRequest('/sales');
+        const products = await apiRequest('/products');
+
+        const lowStockProducts = products.filter(p => getProductStatus(p) !== 'normal');
+
+        document.getElementById('content').innerHTML = `
+          <div class="grid">
+            <div class="hero-card">
+              <div>
+                <h3>💰 ${stats.totalSales}₴</h3>
+                <p>дохід магазину</p>
+              </div>
+              <div>📊</div>
+            </div>
+
+            <div class="hero-card matcha">
+              <div>
+                <h3>${sales.length}</h3>
+                <p>кількість продажів</p>
+              </div>
+              <div>🛒</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>⚠️ Товари з малим залишком</h3>
+
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Товар</th>
+                  <th>Залишок</th>
+                  <th>Мінімум</th>
+                  <th>Постачальник</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${
+                  lowStockProducts.length
+                    ? lowStockProducts.map(p => `
+                      <tr>
+                        <td>${p.name}</td>
+                        <td>${p.quantity}</td>
+                        <td>${p.min_quantity}</td>
+                        <td>${p.supplier_name || '-'}</td>
+                      </tr>
+                    `).join('')
+                    : '<tr><td colspan="4">✅ Усі товари в достатній кількості</td></tr>'
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h3>📋 Історія продажів</h3>
+
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Чек</th>
+                  <th>Дата</th>
+                  <th>Касир</th>
+                  <th>Сума</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${
+                  sales.length
+                    ? sales.map(s => `
+                      <tr>
+                        <td>${s.receipt_number}</td>
+                        <td>${formatDate(s.sale_date)}</td>
+                        <td>${s.cashier_name || '-'}</td>
+                        <td>${s.total_amount}₴</td>
+                      </tr>
+                    `).join('')
+                    : '<tr><td colspan="4">Поки немає продажів</td></tr>'
+                }
+              </tbody>
+            </table>
+          </div>
+        `;
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    loadReports();
+  </script>
+</body>
+</html>

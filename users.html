@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Користувачі — Lulu</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">☁️</div>
+        <span>Lulu</span>
+      </div>
+      <nav class="nav" id="navMenu"></nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="greeting">
+          <h1>Користувачі</h1>
+          <p>Керування акаунтами та ролями</p>
+        </div>
+
+        <div class="user">
+          <span id="userName"></span>
+          <div class="avatar">👤</div>
+          <button onclick="logout()" class="btn" style="background:#fee2e2; color:#dc2626; padding:6px 14px;">Вийти</button>
+        </div>
+      </div>
+
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    const user = checkAuth(['system_admin', 'manager']);
+    updateUserInfo();
+    renderNav('users');
+
+    let users = [];
+    let stores = [];
+
+    async function loadData() {
+      try {
+        users = await apiRequest('/users');
+
+        if (user.role === 'system_admin') {
+          stores = await apiRequest('/stores');
+        }
+
+        renderUsers();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function renderUsers() {
+      const isSystemAdmin = user.role === 'system_admin';
+
+      document.getElementById('content').innerHTML = `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>👥 Список користувачів</h3>
+            <button class="btn primary" onclick="openModal()">+ Додати користувача</button>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ПІБ</th>
+                <th>Логін</th>
+                <th>Email</th>
+                <th>Роль</th>
+                <th>Магазин</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${
+                users.length
+                  ? users.map(u => `
+                    <tr>
+                      <td>${u.full_name}</td>
+                      <td>${u.username}</td>
+                      <td>${u.email || '-'}</td>
+                      <td><span class="badge-completed">${roleName(u.role)}</span></td>
+                      <td>${u.store_name || 'Платформа Lulu'}</td>
+                    </tr>
+                  `).join('')
+                  : '<tr><td colspan="5">Користувачів ще немає</td></tr>'
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div id="modal" class="modal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Додати користувача</h3>
+              <button onclick="closeModal()" style="background:none;border:none;font-size:24px;">&times;</button>
+            </div>
+
+            <form onsubmit="addUser(event)">
+              ${
+                isSystemAdmin
+                  ? `
+                    <div class="form-group">
+                      <label>Магазин</label>
+                      <select id="storeId" class="custom-select">
+                        <option value="">Платформа Lulu / без магазину</option>
+                        ${stores.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+                      </select>
+                    </div>
+                  `
+                  : ''
+              }
+
+              <div class="form-group">
+                <label>ПІБ</label>
+                <input id="fullName" class="custom-input" required>
+              </div>
+
+              <div class="form-group">
+                <label>Логін</label>
+                <input id="username" class="custom-input" required>
+              </div>
+
+              <div class="form-group">
+                <label>Email</label>
+                <input id="email" type="email" class="custom-input">
+              </div>
+
+              <div class="form-group">
+                <label>Пароль</label>
+                <input id="password" type="password" class="custom-input" required>
+              </div>
+
+              <div class="form-group">
+                <label>Роль</label>
+                <select id="role" class="custom-select">
+                  ${
+                    isSystemAdmin
+                      ? `
+                        <option value="system_admin">Системний адміністратор</option>
+                        <option value="manager">Менеджер магазину</option>
+                        <option value="cashier">Касир</option>
+                        <option value="warehouse">Працівник складу</option>
+                      `
+                      : `
+                        <option value="cashier">Касир</option>
+                        <option value="warehouse">Працівник складу</option>
+                      `
+                  }
+                </select>
+              </div>
+
+              <button type="submit" class="btn primary" style="width:100%;">Зберегти</button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    window.openModal = () => {
+      document.getElementById('modal').style.display = 'flex';
+    };
+
+    window.closeModal = () => {
+      document.getElementById('modal').style.display = 'none';
+    };
+
+    window.addUser = async (e) => {
+      e.preventDefault();
+
+      try {
+        const payload = {
+          username: document.getElementById('username').value,
+          password: document.getElementById('password').value,
+          full_name: document.getElementById('fullName').value,
+          email: document.getElementById('email').value,
+          role: document.getElementById('role').value
+        };
+
+        if (user.role === 'system_admin') {
+          const storeValue = document.getElementById('storeId').value;
+          payload.store_id = storeValue ? Number(storeValue) : null;
+        }
+
+        await apiRequest('/users', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        closeModal();
+        await loadData();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+
+    loadData();
+  </script>
+</body>
+</html>

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Продажі — Lulu</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">☁️</div>
+        <span>Lulu</span>
+      </div>
+      <nav class="nav" id="navMenu"></nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="greeting">
+          <h1>Каса</h1>
+          <p>Оформлення продажів магазину</p>
+        </div>
+
+        <div class="user">
+          <span id="userName"></span>
+          <div class="avatar">👤</div>
+          <button onclick="logout()" class="btn" style="background:#fee2e2; color:#dc2626; padding:6px 14px;">Вийти</button>
+        </div>
+      </div>
+
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    const user = checkAuth(['manager', 'cashier']);
+    updateUserInfo();
+    renderNav('sales');
+
+    let products = [];
+    let sales = [];
+    let cart = [];
+
+    async function loadData() {
+      try {
+        products = await apiRequest('/products');
+        sales = await apiRequest('/sales');
+        render();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function render() {
+      document.getElementById('content').innerHTML = `
+        <div class="card pos-layout">
+          <div>
+            <h3>🔍 Вибрати товар</h3>
+
+            <input 
+              type="text" 
+              id="search" 
+              placeholder="Пошук за назвою..." 
+              style="width:100%; padding:12px; border-radius:60px; margin-bottom:20px;" 
+              onkeyup="filterProducts()"
+            >
+
+            <div id="productGrid" class="product-grid"></div>
+          </div>
+
+          <div class="receipt">
+            <h3>🛒 Кошик</h3>
+            <div id="cartItems"></div>
+            <div id="cartTotal" class="total"></div>
+
+            <button class="btn primary" style="width:100%; margin-top:20px;" onclick="completeSale()">
+              ✅ Оформити продаж
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>📋 Історія продажів</h3>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Чек</th>
+                <th>Сума</th>
+                <th>Касир</th>
+                <th>Дата</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${
+                sales.length
+                  ? sales.slice(0, 10).map(s => `
+                    <tr>
+                      <td>${s.receipt_number}</td>
+                      <td>${s.total_amount}₴</td>
+                      <td>${s.cashier_name || '-'}</td>
+                      <td>${formatDate(s.sale_date)}</td>
+                    </tr>
+                  `).join('')
+                  : '<tr><td colspan="4">Поки немає продажів</td></tr>'
+              }
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      filterProducts();
+      updateCartDisplay();
+    }
+
+    window.filterProducts = () => {
+      const query = document.getElementById('search')?.value.toLowerCase() || '';
+
+      const filtered = products.filter(p =>
+        p.name.toLowerCase().includes(query)
+      );
+
+      document.getElementById('productGrid').innerHTML = filtered.map(p => `
+        <div class="product-card">
+          <div>
+            <strong>${p.name}</strong><br>
+            ${p.price}₴ | залишок ${p.quantity}
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+            <button 
+              class="btn" 
+              style="background:#f0d8de; padding:6px 12px; border-radius:40px;" 
+              onclick="changeQty(${p.id}, -1)"
+            >
+              –
+            </button>
+
+            <span id="qty_${p.id}" style="min-width:32px; text-align:center; font-weight:600;">
+              ${p.quantity > 0 ? 1 : 0}
+            </span>
+
+            <button 
+              class="btn" 
+              style="background:#f0d8de; padding:6px 12px; border-radius:40px;" 
+              onclick="changeQty(${p.id}, 1)"
+            >
+              +
+            </button>
+
+            <button 
+              class="btn primary" 
+              style="margin-left:auto;" 
+              onclick="addToCart(${p.id})"
+              ${p.quantity <= 0 ? 'disabled' : ''}
+            >
+              Додати
+            </button>
+          </div>
+        </div>
+      `).join('');
+    };
+
+    window.changeQty = (id, delta) => {
+      const span = document.getElementById(`qty_${id}`);
+      if (!span) return;
+
+      const product = products.find(p => p.id === id);
+      if (!product) return;
+
+      let current = Number(span.innerText);
+      let next = current + delta;
+
+      if (next < 1) next = 1;
+      if (next > Number(product.quantity)) next = Number(product.quantity);
+
+      span.innerText = next;
+    };
+
+    window.addToCart = (id) => {
+      const product = products.find(p => p.id === id);
+      if (!product) return;
+
+      const qtySpan = document.getElementById(`qty_${id}`);
+      const quantity = qtySpan ? Number(qtySpan.innerText) : 1;
+
+      if (quantity <= 0) {
+        alert('Товару немає на складі');
+        return;
+      }
+
+      const existing = cart.find(i => i.id === id);
+      const alreadyInCart = existing ? existing.quantity : 0;
+
+      if (alreadyInCart + quantity > Number(product.quantity)) {
+        alert('Недостатньо товару на складі');
+        return;
+      }
+
+      if (existing) {
+        existing.quantity += quantity;
+      } else {
+        cart.push({
+          id: product.id,
+          name: product.name,
+          price: Number(product.price),
+          quantity
+        });
+      }
+
+      updateCartDisplay();
+      document.getElementById('search').value = '';
+      filterProducts();
+    };
+
+    function updateCartDisplay() {
+      const cartItems = document.getElementById('cartItems');
+      const cartTotal = document.getElementById('cartTotal');
+
+      if (!cartItems) return;
+
+      if (cart.length === 0) {
+        cartItems.innerHTML = '<p>Кошик порожній</p>';
+        cartTotal.innerHTML = '';
+        return;
+      }
+
+      let total = 0;
+
+      cartItems.innerHTML = cart.map(item => {
+        const itemTotal = item.price * item.quantity;
+        total += itemTotal;
+
+        return `
+          <div style="display:flex; justify-content:space-between; border-bottom:1px solid #f0d8de; padding:8px 0;">
+            <span>${item.name} × ${item.quantity}</span>
+
+            <span>
+              ${itemTotal}₴ 
+              <button class="btn danger" style="padding:4px 10px;" onclick="removeFromCart(${item.id})">
+                ✖
+              </button>
+            </span>
+          </div>
+        `;
+      }).join('');
+
+      cartTotal.innerHTML = `${total}₴`;
+    }
+
+    window.removeFromCart = (id) => {
+      cart = cart.filter(i => i.id !== id);
+      updateCartDisplay();
+    };
+
+    window.completeSale = async () => {
+      if (cart.length === 0) {
+        alert('Кошик порожній');
+        return;
+      }
+
+      try {
+        await apiRequest('/sales', {
+          method: 'POST',
+          body: JSON.stringify({
+            items: cart.map(item => ({
+              product_id: item.id,
+              quantity: item.quantity
+            }))
+          })
+        });
+
+        alert('Продаж оформлено');
+
+        cart = [];
+        await loadData();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+
+    loadData();
+  </script>
+</body>
+</html>

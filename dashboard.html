@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Головна — Lulu</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">☁️</div>
+        <span>Lulu</span>
+      </div>
+      <nav class="nav" id="navMenu"></nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="greeting">
+          <h1>Панель керування</h1>
+          <p id="pageDescription">Огляд системи</p>
+        </div>
+
+        <div class="user">
+          <span id="userName"></span>
+          <div class="avatar">👤</div>
+          <button onclick="logout()" class="btn" style="background:#fee2e2; color:#dc2626; padding:6px 14px;">Вийти</button>
+        </div>
+      </div>
+
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    const user = checkAuth();
+    updateUserInfo();
+    renderNav('dashboard');
+
+    async function loadDashboard() {
+      try {
+        if (user.role === 'system_admin') {
+          document.getElementById('pageDescription').innerText = 'Керування магазинами та користувачами платформи';
+
+          const stores = await apiRequest('/stores');
+          const users = await apiRequest('/users');
+
+          document.getElementById('content').innerHTML = `
+            <div class="grid">
+              <div class="hero-card">
+                <div>
+                  <h3>🏪 ${stores.length}</h3>
+                  <p>магазинів у системі</p>
+                </div>
+                <div>☁️</div>
+              </div>
+
+              <div class="hero-card matcha">
+                <div>
+                  <h3>👥 ${users.length}</h3>
+                  <p>користувачів платформи</p>
+                </div>
+                <div>🧑‍💻</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>🏪 Магазини платформи</h3>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Назва</th>
+                    <th>Домен пошти</th>
+                    <th>Статус підписки</th>
+                    <th>Дата створення</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${
+                    stores.length
+                      ? stores.map(store => `
+                        <tr>
+                          <td>${store.name}</td>
+                          <td>${store.email_domain || '-'}</td>
+                          <td><span class="badge-completed">${store.subscription_status}</span></td>
+                          <td>${formatDate(store.created_at)}</td>
+                        </tr>
+                      `).join('')
+                      : '<tr><td colspan="4">Магазинів ще немає</td></tr>'
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card">
+              <h3>👥 Користувачі системи</h3>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Ім’я</th>
+                    <th>Логін</th>
+                    <th>Роль</th>
+                    <th>Магазин</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${
+                    users.length
+                      ? users.map(u => `
+                        <tr>
+                          <td>${u.full_name}</td>
+                          <td>${u.username}</td>
+                          <td>${roleName(u.role)}</td>
+                          <td>${u.store_name || 'Lulu Platform'}</td>
+                        </tr>
+                      `).join('')
+                      : '<tr><td colspan="4">Користувачів ще немає</td></tr>'
+                  }
+                </tbody>
+              </table>
+            </div>
+          `;
+
+          return;
+        }
+
+        document.getElementById('pageDescription').innerText = 'Огляд роботи магазину';
+
+        const stats = await apiRequest('/stats');
+
+        document.getElementById('content').innerHTML = `
+          <div class="grid">
+            <div class="hero-card">
+              <div>
+                <h3>💰 ${stats.totalSales}₴</h3>
+                <p>дохід магазину</p>
+              </div>
+              <div>🛍️</div>
+            </div>
+
+            <div class="hero-card matcha">
+              <div>
+                <h3>${stats.productCount}</h3>
+                <p>товарів у магазині</p>
+              </div>
+              <div>📦</div>
+            </div>
+          </div>
+
+          <div class="small-cards">
+            <div class="stat-card pink">
+              <h3>${stats.lowStockCount}</h3>
+              <p>⚠️ малий залишок</p>
+            </div>
+
+            <div class="stat-card green">
+              <h3>${stats.recentSales.length}</h3>
+              <p>🧾 останні продажі</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>⚠️ Товари з малим залишком</h3>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Назва</th>
+                  <th>Залишок</th>
+                  <th>Мінімум</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  stats.lowProducts.length
+                    ? stats.lowProducts.map(p => `
+                      <tr>
+                        <td>${p.name}</td>
+                        <td>${p.quantity}</td>
+                        <td>${p.min_quantity}</td>
+                        <td><span class="badge warning">малий залишок</span></td>
+                      </tr>
+                    `).join('')
+                    : '<tr><td colspan="4">✅ Усі товари в достатній кількості</td></tr>'
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h3>🕐 Останні продажі</h3>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Чек</th>
+                  <th>Сума</th>
+                  <th>Касир</th>
+                  <th>Дата</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  stats.recentSales.length
+                    ? stats.recentSales.map(s => `
+                      <tr>
+                        <td>${s.receipt_number}</td>
+                        <td>${s.total_amount}₴</td>
+                        <td>${s.cashier || '-'}</td>
+                        <td>${formatDate(s.sale_date)}</td>
+                      </tr>
+                    `).join('')
+                    : '<tr><td colspan="4">Поки немає продажів</td></tr>'
+                }
+              </tbody>
+            </table>
+          </div>
+        `;
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

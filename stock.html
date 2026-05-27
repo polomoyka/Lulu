@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Склад — Lulu</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">☁️</div>
+        <span>Lulu</span>
+      </div>
+      <nav class="nav" id="navMenu"></nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="greeting">
+          <h1>Склад</h1>
+          <p>Поставки та поповнення залишків</p>
+        </div>
+
+        <div class="user">
+          <span id="userName"></span>
+          <div class="avatar">👤</div>
+          <button onclick="logout()" class="btn" style="background:#fee2e2; color:#dc2626; padding:6px 14px;">Вийти</button>
+        </div>
+      </div>
+
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    const user = checkAuth(['manager', 'warehouse']);
+    updateUserInfo();
+    renderNav('stock');
+
+    let products = [];
+    let suppliers = [];
+
+    async function loadData() {
+      try {
+        products = await apiRequest('/products');
+        suppliers = await apiRequest('/suppliers');
+        renderStock();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function renderStock() {
+      document.getElementById('content').innerHTML = `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>📥 Нова поставка</h3>
+            <button class="btn primary" onclick="openDeliveryModal()">+ Додати поставку</button>
+          </div>
+
+          <p style="color:#8b8b8b;">
+            Після створення поставки кількість товару на складі автоматично збільшується.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>📦 Поточні залишки</h3>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Товар</th>
+                <th>Постачальник</th>
+                <th>Кількість</th>
+                <th>Мінімум</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${
+                products.length
+                  ? products.map(p => {
+                    const status = getProductStatus(p);
+
+                    return `
+                      <tr>
+                        <td>${p.name}</td>
+                        <td>${p.supplier_name || '-'}</td>
+                        <td>${p.quantity}</td>
+                        <td>${p.min_quantity}</td>
+                        <td>
+                          ${
+                            status === 'normal'
+                              ? '<span class="badge-completed">в нормі</span>'
+                              : status === 'low'
+                                ? '<span class="badge warning">малий залишок</span>'
+                                : '<span class="badge warning">немає</span>'
+                          }
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')
+                  : '<tr><td colspan="5">Товарів ще немає</td></tr>'
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div id="deliveryModal" class="modal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>➕ Нова поставка</h3>
+              <button onclick="closeDeliveryModal()" style="background:none; border:none; font-size:24px;">
+                &times;
+              </button>
+            </div>
+
+            <form onsubmit="addDelivery(event)">
+              <div class="form-group">
+                <label>Постачальник</label>
+                <select id="deliverySupplier" class="custom-select" onchange="updateProductList()">
+                  ${suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Товар</label>
+                <select id="deliveryProduct" class="custom-select"></select>
+              </div>
+
+              <div class="form-group">
+                <label>Кількість</label>
+                <input type="number" id="deliveryQuantity" class="custom-input" min="1" required>
+              </div>
+
+              <button type="submit" class="btn primary" style="width:100%;">
+                ➕ Додати поставку
+              </button>
+            </form>
+          </div>
+        </div>
+      `;
+
+      updateProductList();
+    }
+
+    window.updateProductList = () => {
+      const supplierSelect = document.getElementById('deliverySupplier');
+      const productSelect = document.getElementById('deliveryProduct');
+
+      if (!supplierSelect || !productSelect) return;
+
+      const supplierId = Number(supplierSelect.value);
+      const filtered = products.filter(p => Number(p.supplier_id) === supplierId);
+
+      productSelect.innerHTML = filtered.length
+        ? filtered.map(p => `<option value="${p.id}">${p.name}</option>`).join('')
+        : '<option disabled>Немає товарів від цього постачальника</option>';
+    };
+
+    window.openDeliveryModal = () => {
+      document.getElementById('deliveryModal').style.display = 'flex';
+      updateProductList();
+    };
+
+    window.closeDeliveryModal = () => {
+      document.getElementById('deliveryModal').style.display = 'none';
+    };
+
+    window.addDelivery = async (e) => {
+      e.preventDefault();
+
+      const supplierId = Number(document.getElementById('deliverySupplier').value);
+      const productId = Number(document.getElementById('deliveryProduct').value);
+      const quantity = Number(document.getElementById('deliveryQuantity').value);
+
+      if (!supplierId || !productId || quantity <= 0) {
+        alert('Заповніть дані коректно');
+        return;
+      }
+
+      try {
+        await apiRequest('/deliveries', {
+          method: 'POST',
+          body: JSON.stringify({
+            supplier_id: supplierId,
+            product_id: productId,
+            quantity
+          })
+        });
+
+        closeDeliveryModal();
+        await loadData();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+
+    loadData();
+  </script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Постачальники — Lulu</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">☁️</div>
+        <span>Lulu</span>
+      </div>
+      <nav class="nav" id="navMenu"></nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="greeting">
+          <h1>Постачальники</h1>
+          <p>Управління постачальниками магазину</p>
+        </div>
+
+        <div class="user">
+          <span id="userName"></span>
+          <div class="avatar">👤</div>
+          <button onclick="logout()" class="btn" style="background:#fee2e2; color:#dc2626; padding:6px 14px;">Вийти</button>
+        </div>
+      </div>
+
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    const user = checkAuth(['manager', 'warehouse']);
+    updateUserInfo();
+    renderNav('suppliers');
+
+    let suppliers = [];
+
+    async function loadSuppliers() {
+      try {
+        suppliers = await apiRequest('/suppliers');
+        render();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function render() {
+      document.getElementById('content').innerHTML = `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>🚚 Список постачальників</h3>
+            <button class="btn primary" onclick="openModal()">+ Додати</button>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Назва</th>
+                <th>Контакт</th>
+                <th>Телефон</th>
+                <th>Email</th>
+                <th>Адреса</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${
+                suppliers.length
+                  ? suppliers.map(s => `
+                    <tr>
+                      <td>${s.name}</td>
+                      <td>${s.contact_person || '-'}</td>
+                      <td>${s.phone || '-'}</td>
+                      <td>${s.email || '-'}</td>
+                      <td>${s.address || '-'}</td>
+                    </tr>
+                  `).join('')
+                  : '<tr><td colspan="5">Постачальників ще немає</td></tr>'
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div id="modal" class="modal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Додати постачальника</h3>
+              <button onclick="closeModal()" style="background:none;border:none;font-size:24px;">
+                &times;
+              </button>
+            </div>
+
+            <form onsubmit="addSupplier(event)">
+              <div class="form-group">
+                <label>Назва</label>
+                <input id="name" class="custom-input" required>
+              </div>
+
+              <div class="form-group">
+                <label>Контактна особа</label>
+                <input id="contact" class="custom-input">
+              </div>
+
+              <div class="form-group">
+                <label>Телефон</label>
+                <input id="phone" class="custom-input">
+              </div>
+
+              <div class="form-group">
+                <label>Email</label>
+                <input id="email" class="custom-input" type="email">
+              </div>
+
+              <div class="form-group">
+                <label>Адреса</label>
+                <input id="address" class="custom-input">
+              </div>
+
+              <button type="submit" class="btn primary" style="width:100%;">
+                Зберегти
+              </button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    window.openModal = () => {
+      document.getElementById('modal').style.display = 'flex';
+    };
+
+    window.closeModal = () => {
+      document.getElementById('modal').style.display = 'none';
+    };
+
+    window.addSupplier = async (e) => {
+      e.preventDefault();
+
+      try {
+        await apiRequest('/suppliers', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: document.getElementById('name').value,
+            contact_person: document.getElementById('contact').value,
+            phone: document.getElementById('phone').value,
+            email: document.getElementById('email').value,
+            address: document.getElementById('address').value
+          })
+        });
+
+        closeModal();
+        await loadSuppliers();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+
+    loadSuppliers();
+  </script>
+</body>
+</html>

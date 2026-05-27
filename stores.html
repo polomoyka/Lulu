@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Магазини — Lulu</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">☁️</div>
+        <span>Lulu</span>
+      </div>
+      <nav class="nav" id="navMenu"></nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="greeting">
+          <h1>Магазини</h1>
+          <p>Керування клієнтами платформи Lulu</p>
+        </div>
+
+        <div class="user">
+          <span id="userName"></span>
+          <div class="avatar">👤</div>
+          <button onclick="logout()" class="btn" style="background:#fee2e2; color:#dc2626; padding:6px 14px;">Вийти</button>
+        </div>
+      </div>
+
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    checkAuth(['system_admin']);
+    updateUserInfo();
+    renderNav('stores');
+
+    let stores = [];
+
+    async function loadStores() {
+      try {
+        stores = await apiRequest('/stores');
+        renderStores();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function renderStores() {
+      document.getElementById('content').innerHTML = `
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>🏪 Список магазинів</h3>
+            <button class="btn primary" onclick="openModal()">+ Додати магазин</button>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Назва</th>
+                <th>Домен пошти</th>
+                <th>Статус підписки</th>
+                <th>Дата створення</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                stores.length
+                  ? stores.map(store => `
+                    <tr>
+                      <td>${store.name}</td>
+                      <td>${store.email_domain || '-'}</td>
+                      <td><span class="badge-completed">${store.subscription_status}</span></td>
+                      <td>${formatDate(store.created_at)}</td>
+                    </tr>
+                  `).join('')
+                  : '<tr><td colspan="4">Магазинів ще немає</td></tr>'
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div id="modal" class="modal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3>Додати магазин</h3>
+              <button onclick="closeModal()" style="background:none;border:none;font-size:24px;">&times;</button>
+            </div>
+
+            <form onsubmit="addStore(event)">
+              <div class="form-group">
+                <label>Назва магазину</label>
+                <input id="storeName" class="custom-input" required>
+              </div>
+
+              <div class="form-group">
+                <label>Корпоративний домен</label>
+                <input id="storeDomain" class="custom-input" placeholder="example.ua">
+              </div>
+
+              <div class="form-group">
+                <label>Статус підписки</label>
+                <select id="storeStatus" class="custom-select">
+                  <option value="active">active</option>
+                  <option value="trial">trial</option>
+                  <option value="paused">paused</option>
+                </select>
+              </div>
+
+              <button type="submit" class="btn primary" style="width:100%;">Зберегти</button>
+            </form>
+          </div>
+        </div>
+      `;
+    }
+
+    window.openModal = () => {
+      document.getElementById('modal').style.display = 'flex';
+    };
+
+    window.closeModal = () => {
+      document.getElementById('modal').style.display = 'none';
+    };
+
+    window.addStore = async (e) => {
+      e.preventDefault();
+
+      try {
+        await apiRequest('/stores', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: document.getElementById('storeName').value,
+            email_domain: document.getElementById('storeDomain').value,
+            subscription_status: document.getElementById('storeStatus').value
+          })
+        });
+
+        closeModal();
+        await loadStores();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+
+    loadStores();
+  </script>
+</body>
+</html>

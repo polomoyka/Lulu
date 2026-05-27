@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Вхід — Lulu</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <div class="login-logo">☁️</div>
+    <h1>Lulu</h1>
+    <div class="login-sub">SaaS-платформа автоматизації магазинів</div>
+
+    <div id="errorMsg" class="error"></div>
+
+    <form id="loginForm">
+      <div class="input-group">
+        <label>Логін</label>
+        <input type="text" id="username" placeholder="admin / manager / cashier / warehouse" required>
+      </div>
+
+      <div class="input-group">
+        <label>Пароль</label>
+        <input type="password" id="password" placeholder="*****" required>
+      </div>
+
+      <button type="submit" class="login-btn">Увійти</button>
+    </form>
+
+    <div class="demo">
+      🔑 admin / admin123 — системний адміністратор<br>
+      🔑 manager / manager123 — менеджер магазину<br>
+      🔑 cashier / cashier123 — касир<br>
+      🔑 warehouse / warehouse123 — склад
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const errorMsg = document.getElementById('errorMsg');
+      errorMsg.style.display = 'none';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+
+      try {
+        const response = await fetch(`${API_URL}/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Помилка входу');
+        }
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('loggedUser', JSON.stringify(data.user));
+
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        errorMsg.style.display = 'block';
+        errorMsg.innerText = err.message;
+      }
+    });
+  </script>
+</body>
+</html>
